@@ -1,40 +1,40 @@
-#include "curses.h"
+#pragma once
 #include "Character.h"
 
-#ifndef FIELD_H
-#define FIELD_H
+using namespace std;
 
-class Screen 
+class Field;
+
+struct Position 
 {
-	int _height, _width;
-public:
- 	Screen();
-	~Screen() { endwin(); }
-	void add(const char *message) { printw(message); }
-	int height() { return _height; }
-	int width() { return _width; }
+	int x, y;
+	Position() : x(0), y(0) {};
+	Position(int x, int y) : x(x), y(y) {};
 };
 
-class Field 
+static Field* field;
+void setField(Field* this_field);
+
+class Field
 {
-	int _height, _width;
-	int _row, _col;
-	WINDOW *_w; 
 public:
-	Field(int nr_rows, int nr_cols, int row_0, int col_0);
-	~Field() { delwin(_w); }
+	Field() : width(0), height(0), pos(), game_continues(false) { setField(this); level = -1; };
+	~Field() {};
 
-	int height() { return _height; } 
-	int width() { return _width; } 
-	int row() { return _row; } 
-	int col() { return _col; }
+	void read();
+	void render();
+	void render(BaseObject*);
+	void swap(BaseObject*, BaseObject*);
+	BaseObject* getObject(int x, int y) { return tiles[y][x]; }
+	void removeObject(int x, int y);
+	void setNewFireball(Fireball*);
 
-	void fill();
-
-	bool emptyCell(int row_0, int col_0);
-	void refresh() { wrefresh(_w); }
-	void addCharacter(Character &x) { mvwaddch(_w, x.row(), x.col(), x.symbol() | x.color() | A_BOLD); }
-	void erase(Character &x) { mvwaddch(_w, x.row(), x.col(), ' '); } 
-	void addAtPos(Character &x, int row_0, int col_0);
+	int width;
+	int height;
+	int level;
+	Position pos;
+	bool game_continues;
+	vector<vector<BaseObject*>> tiles;
+	vector<Character*> characters;
+	vector<Fireball*> fireballs;
 };
-#endif

@@ -1,64 +1,130 @@
+#pragma once
 #include "Field.h"
-#include <vector>
-#include <fstream>
-#include <iostream>
 
 using namespace std;
 
-Screen::Screen()
+void Field::read() 
+{
+	if (level != 3) level++;
+	string file_name = to_string(level) + ".txt";
+	ifstream fin(file_name.c_str());
+	vector<string> scheme;
+	string line;
+	while (getline(fin, line))
+		scheme.push_back(line);
+	fin.close();
+
+	height = scheme.size();
+	width = scheme.front().size();
+
+	tiles.resize(height);
+	for (size_t i = 0; i < tiles.size(); ++i) 
+	{
+		tiles[i] = vector<BaseObject*>(width);
+		for (size_t j = 0; j < tiles[i].size(); ++j)
+			switch (scheme[i][j]) 
+			{
+			case '#':     
+				tiles[i][j] = new Wall(j, i); 
+				break;
+			case '.':    
+				tiles[i][j] = new Floor(j, i); 
+				break;
+			case 'P': 
+				tiles[i][j] = new Princess(j, i); 
+				break;
+			case 'K':   
+				tiles[i][j] = new Knight(j, i); 
+				pos.y = i; pos.x = j; 
+				break;
+			case 'Z':   
+				tiles[i][j] = new Zombie(j, i); 
+				characters.push_back(static_cast<Character*>(tiles[i][j])); 
+				break;
+			case 'D':   
+				tiles[i][j] = new Dragon(j, i); 
+				characters.push_back(static_cast<Character*>(tiles[i][j])); 
+				break;
+			case '&': 
+				tiles[i][j] = new MedicineChest(j, i);
+			}
+	}
+}
+
+void Field::swap(BaseObject* o1, BaseObject* o2) 
+{
+	int x = o2->x(), y = o2->y();
+	tiles[o1->y()][o1->x()] = o2;
+	tiles[o2->y()][o2->x()] = o1;
+	o2->x(o1->x()); o2->y(o1->y());
+	o1->x(x); o1->y(y);
+	if (o1->symbol() == 'K') 
+	{ 
+		pos.x = o1->x(); 
+		pos.y = o1->y(); 
+	}
+	if (o2->symbol() == 'K') 
+	{ 
+		pos.x = o2->x(); 
+		pos.y = o2->y(); 
+	}
+	render(o1); render(o2);
+	refresh();
+}
+
+void Field::render() 
 {
 	initscr();
-	start_color();
-	init_pair(1, COLOR_BLUE, COLOR_BLACK);
-	init_pair(2, COLOR_RED, COLOR_BLACK);
-	init_pair(3, COLOR_CYAN, COLOR_BLACK);
 	clear();
 	noecho();
 	cbreak();
 	keypad(stdscr, TRUE);
 	curs_set(0);
-	getmaxyx(stdscr, _height, _width);
+	resize_term(height + 10 + height % 2, width + 20 + !(width % 2));
+	start_color();
+
+	for (size_t i = 0; i < tiles.size(); ++i)
+		for (size_t j = 0; j < tiles[i].size(); ++j)
+			render(tiles[i][j]);
+
+	refresh();
 }
 
-Field::Field(int nr_rows, int nr_cols, int row_0, int col_0) 
+void Field::render(BaseObject* t) 
 {
-	_w = newwin(nr_rows, nr_cols, row_0, col_0);
-	_height = nr_rows;
-	_width = nr_cols;
-	_row = row_0;
-	_col = col_0;
+	init_pair(t->symbol(), t->color(), 0);
+	attron(COLOR_PAIR(t->symbol()));
+	mvaddch(t->y() + 5, t->x() + 10, t->symbol());
+	attroff(COLOR_PAIR(t->symbol()));
 }
 
-void Field::addAtPos(Character &x, int row_0, int col_0)
+void Field::setNewFireball(Fireball* other) 
 {
-	if ((row_0 >= 0 && row_0 < _height) && (col_0 >= 0 && col_0 < _width))
+	if (tiles[other->y()][other->x()]->collide(*other) == EMPTY_TILE) 
 	{
-		char ch = mvwinch(_w, row_0, col_0);
-		if (ch == '#')
-			return;
-		erase(x);
-		mvwaddch(_w, row_0, col_0, x.symbol() | A_BOLD | x.color());
-		x.newPos(row_0, col_0);
+		delete tiles[other->y()][other->x()];
+		tiles[other->y()][other->x()] = other;
+		fireballs.push_back(other);
+		render(other);
+		refresh();
 	}
 }
 
-bool Field::emptyCell(int row_0, int col_0)
+void Field::removeObject(int x, int y)
 {
-	char ch = mvwinch(_w, row_0, col_0); 
-	if (ch == '#')
-		return FALSE;
-	return TRUE;
-}
-
-void Field::fill()
-{
-	ifstream level("level1.txt");
-
-	for (int i = 0; i < 23; i++)
+	if (tiles[y][x]->symbol() == '*')
 	{
-		char str[75];
-		level.getline(str, 75);
-		mvwaddstr(_w, i, 0, str);
+		for (size_t i = 0; i < fireballs.size(); ++i)
+			if (tiles[y][x] == fireballs[i])
+				fireballs.erase(fireballs.begin() + i);
 	}
-
+	else if (tiles[y][x]->symbol() == 'K')
+	{
+		game_continues = false;
+		return;
+	}
+	delete tiles[y][x];
+	tiles[y][x] = new Floor(x, y);
+	render(tiles[y][x]);
+	refresh();
 }
